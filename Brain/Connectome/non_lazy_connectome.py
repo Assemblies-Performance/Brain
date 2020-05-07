@@ -148,8 +148,6 @@ class NonLazyConnectome(Connectome):
 
         self.update_connectomes(new_winners, sources_mapping)
 
-        # once done everything, update areas winners and support
+        # once done everything, update areas winners
         for area in to_update:
             area.winners = new_winners[area]
-            for winner in new_winners[area]:
-                area.support[winner] = 1

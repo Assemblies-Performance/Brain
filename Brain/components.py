@@ -17,9 +17,8 @@ class Area:
         self.beta: float = beta
         self.n: int = n
         self.k: int = k
-        self.support: List[int] = [0] * self.n
         self.winners: List[int] = []
-        self.new_winners: List[int] = []
+        self.support_size = 0
 
         if k < 0:
             self.k = math.sqrt(n)
