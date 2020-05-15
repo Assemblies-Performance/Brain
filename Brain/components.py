@@ -1,5 +1,6 @@
 import math
-from typing import List, Union
+from typing import List, Union, Set
+import numpy as np
 
 
 class Stimulus:
@@ -17,7 +18,7 @@ class Area:
         self.beta: float = beta
         self.n: int = n
         self.k: int = k
-        self.winners: List[int] = []
+        self.winners: Set[int] = set()
         self.support_size = 0
 
         if k < 0:
@@ -31,7 +32,7 @@ class Connection:
     def __init__(self, source, dest, synapses=None):
         self.source = source
         self.dest = dest
-        self.synapses = synapses
+        self.synapses = synapses if synapses is not None else np.empty((0, 0))
 
     @property
     def beta(self):

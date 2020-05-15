@@ -34,14 +34,14 @@ class NonLazyConnectome(Connectome):
         super(NonLazyConnectome, self).__init__(p, areas, stimuli)
 
         if initialize:
-            self._initialize_parts(areas + stimuli)
+            self._initialize_parts((areas or []) + (stimuli or []))
 
     def add_area(self, area: Area):
-        super(self).add_area(area)
+        super().add_area(area)
         self._initialize_parts([area])
 
     def add_stimulus(self, stimulus: Stimulus):
-        super(self).add_stimulus(stimulus)
+        super().add_stimulus(stimulus)
         self._initialize_parts([stimulus])
 
     def _initialize_parts(self, parts: List[BrainPart]):

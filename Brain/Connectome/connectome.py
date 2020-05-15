@@ -48,7 +48,7 @@ class Connectome:
         self.areas.append(area)
 
     def add_stimulus(self, stimulus: Stimulus):
-        self.stimuli.appennd(stimulus)
+        self.stimuli.append(stimulus)
 
     @abstractmethod
     def subconnectome(self, connections: Dict[BrainPart, Area]) -> Connectome:
