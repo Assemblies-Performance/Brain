@@ -108,7 +108,7 @@ class LazyConnectome(Connectome):
                  and the new winners
         """
         both = np.array(prev_winner_inputs + potential_new_winners)
-        new_winners = np.argpartition(both, area.k)[:area.k]
+        new_winners = np.argpartition(both, area.k-1)[:area.k]
         num_first_winners = 0
         first_winner_inputs = []
         for i in range(area.k):
@@ -116,7 +116,6 @@ class LazyConnectome(Connectome):
                 first_winner_inputs.append(both[new_winners[i]])
                 new_winners[i] = area.support_size + num_first_winners
                 num_first_winners += 1
-        print(f"New Winners: {len(new_winners)}")
         return first_winner_inputs, new_winners
 
     def _project_into(self, area: Area, sources: List[BrainPart]) \
@@ -221,7 +220,7 @@ class LazyConnectome(Connectome):
             # total_in - how many fired from from_area to this first winner (i)
             total_in = first_winner_to_inputs[neuron][other]
             # randomize which winners in from_area fired to i
-            sample_indices = random.sample(other.winners, int(total_in))
+            sample_indices = random.sample(list(other.winners), int(total_in))
             for other_neuron in range(other.support_size):
                 # other_neuron that fired has connections with weight 1 (in prob 1)
                 if other_neuron in sample_indices:

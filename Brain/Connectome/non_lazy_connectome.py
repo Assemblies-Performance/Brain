@@ -1,11 +1,12 @@
 from itertools import product, chain
 from numpy.core._multiarray_umath import ndarray
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Iterable
 import logging
 import heapq
 import numpy as np
 from collections import defaultdict
 from wrapt import ObjectProxy
+import scipy.sparse as sp
 
 from ..components import Area, BrainPart, Stimulus, Connection
 from .connectome import Connectome
@@ -22,7 +23,6 @@ class NonLazyConnectome(Connectome):
         initialize: Whether or not to fill the connectome of the brain in each place the connections are missing. If
         this is a subconnectome the initialize flag should be False
     """
-
     def __init__(self, p: float, areas=None, stimuli=None, connections=None, initialize=True):
         """
         :param p: The attribute p for the probability of an edge to exits
@@ -52,9 +52,11 @@ class NonLazyConnectome(Connectome):
         """
         for part in parts:
             for other in self.areas + self.stimuli:
-                self._initialize_connection(part, other)
+               # self._initialize_connection(part, other)
                 if isinstance(part, Area) and part != other:
-                    self._initialize_connection(other, part)
+                    # TODO? Add back _initialize_connection
+                    # self._initialize_connection(other, part)
+                    pass
 
     def _initialize_connection(self, part: BrainPart, area: Area):
         """
@@ -64,6 +66,7 @@ class NonLazyConnectome(Connectome):
         :return:
         """
         synapses = np.random.binomial(1, self.p, (part.n, area.n)).astype(dtype='f')
+        # synapses = sp.random(part.n, area.n, density=self.p, data_rvs=np.ones, format='lil', dtype='f')
         self.connections[part, area] = Connection(part, area, synapses)
 
     def subconnectome(self, connections: Dict[BrainPart, List[Area]]) -> Connectome:
@@ -75,7 +78,6 @@ class NonLazyConnectome(Connectome):
                                 initialize=False)
         return nlc
         # TODO fix this, this part doesn't work with the new connections implemnentation!
-        # nlc =
 
     def area_connections(self, area: Area) -> List[BrainPart]:
         return [source for source, dest in self.connections if dest == area]
@@ -91,10 +93,9 @@ class NonLazyConnectome(Connectome):
                 beta = source.beta if isinstance(source, Area) else area.beta
                 for i in new_winners[area]:
                     # update weight (*(1+beta)) for all neurons in stimulus / the winners in area
-                    source_neurons: List[int] = range(source.n) if isinstance(source, Stimulus) else source.winners
+                    source_neurons: Iterable[int] = range(source.n) if isinstance(source, Stimulus) else source.winners
                     for j in source_neurons:
                         self.connections[source, area][j][i] *= (1 + beta)
-                print(f'connection {source}-{area} now looks like: {self.connections[source, area]}')
 
     def project_into(self, area: Area, sources: List[BrainPart]) -> List[int]:
         """Project multiple stimuli and area assemblies into area 'area' at the same time.
@@ -106,25 +107,19 @@ class NonLazyConnectome(Connectome):
         # Said total inputs list is saved in prev_winner_inputs
         src_areas = [src for src in sources if isinstance(src, Area)]
         src_stimuli = [src for src in sources if isinstance(src, Stimulus)]
+        for part in sources:
+            if (part, area) not in self.connections:
+                self._initialize_connection(part, area)
 
-        prev_winner_inputs: List[float] = np.zeros(area.n)
+        prev_winner_inputs: ndarray = np.zeros(area.n)
         for source in src_areas:
             area_connectomes = self.connections[source, area]
             for winner in source.winners:
                 prev_winner_inputs += area_connectomes[winner]
 
         if src_stimuli:
-            prev_winner_inputs += sum([
-                np.dot(
-                    np.ones(
-                        stim.n
-                    ),
-                    self.connections[stim, area].synapses
-                )
-                for stim in src_stimuli
-            ])
-
-        print(f'prev_winner_inputs: {prev_winner_inputs}')
+            lst = [np.sum(self.connections[stim, area].synapses, axis=0) for stim in src_stimuli]
+            prev_winner_inputs += sum(lst)
         return heapq.nlargest(area.k, list(range(len(prev_winner_inputs))), prev_winner_inputs.__getitem__)
 
     def project(self, connections: Dict[BrainPart, List[Area]]):
@@ -144,7 +139,6 @@ class NonLazyConnectome(Connectome):
         new_winners: Dict[Area, List[int]] = dict()
         for area in to_update:
             new_winners[area] = self.project_into(area, sources_mapping[area])
-            print(f'new winners of {area}: {new_winners[area]}')
 
         self.update_connectomes(new_winners, sources_mapping)
 
