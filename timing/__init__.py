@@ -3,6 +3,9 @@ import time
 import functools
 import inspect
 import click
+import traceback
+import sys
+
 
 from typing import Optional, Callable, Any
 
@@ -14,6 +17,7 @@ def run_timed(func: Callable, name: Optional[str] = None, *args, **kwargs):
         ret = func(*args, **kwargs)
     except BaseException as e:
         click.echo(f"\x1b[31m[ERROR] Function \x1b[1m{name}\x1b[0m\x1b[31m failed with error \n\t> {e}\x1b[37m")
+        traceback.print_tb(sys.exc_info()[2])
         return None
     t1 = time.time()
     click.echo(f'\x1b[33m[INFO] Executed \x1b[1m{name}\x1b[0m\x1b[33m in {int((t1 - t0) * 1000)}ms\x1b[37m')

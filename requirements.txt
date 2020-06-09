@@ -57,3 +57,13 @@ wcwidth==0.1.9
 Werkzeug==1.0.1
 wrapt==1.12.1
 zipp==3.1.0
+
+pip~=20.1.1
+wheel~=0.34.2
+cryptography~=2.7
+setuptools~=46.4.0
+Cython~=0.29.19
+cffi~=1.12.3
+matplotlib~=3.2.1
+Deprecated~=1.2.10
+randomgen~=1.18.1

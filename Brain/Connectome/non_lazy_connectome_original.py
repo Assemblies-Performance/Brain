@@ -1,5 +1,6 @@
 from itertools import product, chain
-from numpy.core._multiarray_umath import ndarray
+from numpy import ndarray
+from numpy.random import Generator, PCG64
 from typing import Dict, List, Tuple, Iterable
 import logging
 import heapq
@@ -9,13 +10,13 @@ from wrapt import ObjectProxy
 import scipy.sparse as sp
 
 from ..components import Area, BrainPart, Stimulus, Connection
-from .connectome import Connectome
+from .abc_connectome import ABCConnectome
 
 
-class NonLazyConnectome(Connectome):
+class NonLazyConnectomeOriginal(ABCConnectome):
     """
-    Implementation of Non lazy random based connectome, based on the generic connectome.
-    The object representing the connection in here is ndarray from numpy
+    Implementation of Non lazy sparse random based connectome, based on the generic connectome.
+    The object representing the connection in here is sparse scipy array
 
     Attributes:
         (All the attributes of Connectome
@@ -23,7 +24,7 @@ class NonLazyConnectome(Connectome):
         initialize: Whether or not to fill the connectome of the brain in each place the connections are missing. If
         this is a subconnectome the initialize flag should be False
     """
-    def __init__(self, p: float, areas=None, stimuli=None, connections=None, initialize=True):
+    def __init__(self, p: float, areas=None, stimuli=None, connections=None, initialize=False):
         """
         :param p: The attribute p for the probability of an edge to exits
         :param areas: list of areas
@@ -31,7 +32,7 @@ class NonLazyConnectome(Connectome):
         :param connections: Optional argument which gives active connections to the connectome
         :param initialize: Whether or not to initialize the connectome of the brain.
         """
-        super(NonLazyConnectome, self).__init__(p, areas, stimuli)
+        super(NonLazyConnectomeOriginal, self).__init__(p, areas, stimuli)
 
         if initialize:
             self._initialize_parts((areas or []) + (stimuli or []))
@@ -52,11 +53,10 @@ class NonLazyConnectome(Connectome):
         """
         for part in parts:
             for other in self.areas + self.stimuli:
-               # self._initialize_connection(part, other)
+                self._initialize_connection(part, other)
                 if isinstance(part, Area) and part != other:
                     # TODO? Add back _initialize_connection
-                    # self._initialize_connection(other, part)
-                    pass
+                    self._initialize_connection(other, part)
 
     def _initialize_connection(self, part: BrainPart, area: Area):
         """
@@ -65,16 +65,16 @@ class NonLazyConnectome(Connectome):
         :param area: Area which the connection go to
         :return:
         """
-        synapses = np.random.binomial(1, self.p, (part.n, area.n)).astype(dtype='f')
+        synapses = np.random.binomial(1, self.p, (part.n, area.n)).astype('float64')
         # synapses = sp.random(part.n, area.n, density=self.p, data_rvs=np.ones, format='lil', dtype='f')
         self.connections[part, area] = Connection(part, area, synapses)
 
-    def subconnectome(self, connections: Dict[BrainPart, List[Area]]) -> Connectome:
+    def subconnectome(self, connections: Dict[BrainPart, List[Area]]) -> ABCConnectome:
         areas = set([part for part in connections if isinstance(part, Area)] + list(chain(*connections.values())))
         stimuli = [part for part in connections if isinstance(part, Stimulus)]
         edges = [(part, area) for part in connections for area in connections[part]]
         neural_subnet = [(edge, self.connections[edge]) for edge in edges]
-        nlc = NonLazyConnectome(self.p, areas=list(areas), stimuli=stimuli, connections=neural_subnet,
+        nlc = NonLazyConnectomeOriginal(self.p, areas=list(areas), stimuli=stimuli, connections=neural_subnet,
                                 initialize=False)
         return nlc
         # TODO fix this, this part doesn't work with the new connections implemnentation!
@@ -94,6 +94,7 @@ class NonLazyConnectome(Connectome):
                 for i in new_winners[area]:
                     # update weight (*(1+beta)) for all neurons in stimulus / the winners in area
                     source_neurons: Iterable[int] = range(source.n) if isinstance(source, Stimulus) else source.winners
+
                     for j in source_neurons:
                         self.connections[source, area][j][i] *= (1 + beta)
 
@@ -110,7 +111,6 @@ class NonLazyConnectome(Connectome):
         for part in sources:
             if (part, area) not in self.connections:
                 self._initialize_connection(part, area)
-
         prev_winner_inputs: ndarray = np.zeros(area.n)
         for source in src_areas:
             area_connectomes = self.connections[source, area]

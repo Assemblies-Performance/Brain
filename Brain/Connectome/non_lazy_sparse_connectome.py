@@ -1,19 +1,21 @@
-from itertools import chain
-from numpy.core import ndarray
-from typing import Dict, List, Iterable
+from itertools import product, chain
+from numpy.core._multiarray_umath import ndarray
+from typing import Dict, List, Tuple, Iterable
+import logging
+import heapq
 import numpy as np
 from collections import defaultdict
-
-from ..Performance import MultithreadedRNG, RandomMatrix
+from wrapt import ObjectProxy
+import scipy.sparse as sp
 
 from ..components import Area, BrainPart, Stimulus, Connection
 from .abc_connectome import ABCConnectome
 
 
-class Connectome(ABCConnectome):
+class NonLazySparseConnectome(ABCConnectome):
     """
-    Implementation of Non lazy random based connectome, based on the generic connectome.
-    The object representing the connection in here is ndarray from numpy
+    Implementation of Non lazy sparse random based connectome, based on the generic connectome.
+    The object representing the connection in here is sparse scipy array
 
     Attributes:
         (All the attributes of Connectome
@@ -21,7 +23,7 @@ class Connectome(ABCConnectome):
         initialize: Whether or not to fill the connectome of the brain in each place the connections are missing. If
         this is a subconnectome the initialize flag should be False
     """
-    def __init__(self, p: float, areas=None, stimuli=None, connections=None, initialize=False):
+    def __init__(self, p: float, areas=None, stimuli=None, connections=None, initialize=True):
         """
         :param p: The attribute p for the probability of an edge to exits
         :param areas: list of areas
@@ -29,9 +31,7 @@ class Connectome(ABCConnectome):
         :param connections: Optional argument which gives active connections to the connectome
         :param initialize: Whether or not to initialize the connectome of the brain.
         """
-        super(Connectome, self).__init__(p, areas, stimuli)
-
-        self.rng = MultithreadedRNG()
+        super(NonLazySparseConnectome, self).__init__(p, areas, stimuli)
 
         if initialize:
             self._initialize_parts((areas or []) + (stimuli or []))
@@ -52,9 +52,11 @@ class Connectome(ABCConnectome):
         """
         for part in parts:
             for other in self.areas + self.stimuli:
-                self._initialize_connection(part, other)
+               # self._initialize_connection(part, other)
                 if isinstance(part, Area) and part != other:
-                    self._initialize_connection(other, part)
+                    # TODO? Add back _initialize_connection
+                    # self._initialize_connection(other, part)
+                    pass
 
     def _initialize_connection(self, part: BrainPart, area: Area):
         """
@@ -63,10 +65,8 @@ class Connectome(ABCConnectome):
         :param area: Area which the connection go to
         :return:
         """
-
-        synapses = RandomMatrix(part.n, area.n, self.p, self.rng).values
         # synapses = np.random.binomial(1, self.p, (part.n, area.n)).astype(dtype='f')
-        # synapses = sp.random(part.n, area.n, density=self.p, data_rvs=np.ones, format='lil', dtype='f')
+        synapses = sp.random(part.n, area.n, density=self.p, data_rvs=np.ones, format='lil', dtype='f')
         self.connections[part, area] = Connection(part, area, synapses)
 
     def subconnectome(self, connections: Dict[BrainPart, List[Area]]) -> ABCConnectome:
@@ -74,8 +74,8 @@ class Connectome(ABCConnectome):
         stimuli = [part for part in connections if isinstance(part, Stimulus)]
         edges = [(part, area) for part in connections for area in connections[part]]
         neural_subnet = [(edge, self.connections[edge]) for edge in edges]
-        nlc = Connectome(self.p, areas=list(areas), stimuli=stimuli, connections=neural_subnet,
-                         initialize=False)
+        nlc = NonLazySparseConnectome(self.p, areas=list(areas), stimuli=stimuli, connections=neural_subnet,
+                                initialize=False)
         return nlc
         # TODO fix this, this part doesn't work with the new connections implemnentation!
 
@@ -91,10 +91,11 @@ class Connectome(ABCConnectome):
         for area in new_winners:
             for source in sources[area]:
                 beta = source.beta if isinstance(source, Area) else area.beta
-                source_neurons: Iterable[int] = \
-                    range(source.n) if isinstance(source, Stimulus) else list(source.winners)
-
-                self.connections[source, area].synapses[source_neurons, np.asarray(new_winners[area])[:, None]] *= (1 + beta)
+                for i in new_winners[area]:
+                    # update weight (*(1+beta)) for all neurons in stimulus / the winners in area
+                    source_neurons: Iterable[int] = range(source.n) if isinstance(source, Stimulus) else source.winners
+                    for j in source_neurons:
+                        self.connections[source, area][j, i] *= (1 + beta)
 
     def project_into(self, area: Area, sources: List[BrainPart]) -> List[int]:
         """Project multiple stimuli and area assemblies into area 'area' at the same time.
@@ -113,10 +114,14 @@ class Connectome(ABCConnectome):
         prev_winner_inputs: ndarray = np.zeros(area.n)
         for source in src_areas:
             area_connectomes = self.connections[source, area]
-            prev_winner_inputs += np.sum((area_connectomes.synapses[winner, :] for winner in source.winners), axis=0)
+            for winner in source.winners:
+                prev_winner_inputs += area_connectomes[winner]
+
         if src_stimuli:
-            prev_winner_inputs += np.sum(self.connections[stim, area].synapses.sum(axis=0) for stim in src_stimuli)
-        return np.argpartition(prev_winner_inputs, area.k-1)[-area.k:]
+            lst = [self.connections[stim, area].synapses.sum(axis=0) for stim in src_stimuli]
+
+            prev_winner_inputs += np.reshape(np.asarray(sum(lst)), (area.n,))
+        return heapq.nlargest(area.k, list(range(len(prev_winner_inputs))), prev_winner_inputs.__getitem__)
 
     def project(self, connections: Dict[BrainPart, List[Area]]):
         """ Project is the basic operation where some stimuli and some areas are activated,

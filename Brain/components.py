@@ -18,7 +18,7 @@ class Area:
         self.beta: float = beta
         self.n: int = n
         self.k: int = k
-        self.winners: Set[int] = set()
+        self.winners: List[int] = list()
         self.support_size = 0
 
         if k < 0:

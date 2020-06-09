@@ -2,7 +2,7 @@
 from typing import Dict
 
 from .components import *
-from .Connectome import Connectome
+from .Connectome import ABCConnectome
 
 
 # Library Ext team:
@@ -44,9 +44,9 @@ class Brain:
         connectome separately.
     """
 
-    def __init__(self, connectome: Connectome):
-        self.connectome: Connectome = connectome
-        self.active_connectome: Connectome = connectome
+    def __init__(self, connectome: ABCConnectome):
+        self.connectome: ABCConnectome = connectome
+        self.active_connectome: ABCConnectome = connectome
         self.winners: Dict[Area, List[int]] = {}
 
     def add_area(self, area: Area):
@@ -56,7 +56,7 @@ class Brain:
         self.connectome.add_stimulus(stimulus)
 
     # Performance:
-    def next_round(self, subconnectome: Connectome = None):
+    def next_round(self, subconnectome: ABCConnectome = None):
         """
         Calculate the next set of winners in each part of the given subconnectome.
         (Equivalent to previous project_into/project)
