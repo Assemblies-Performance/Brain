@@ -7,6 +7,8 @@
 [![guyde](https://img.shields.io/badge/guyde-100%25-9cf)](https://github.com/guyde2011)
 [![badges](https://img.shields.io/badge/badges-118%25-ffcc99)](https://img.shields.io/badge/badges-118%25-ffcc99)
 [![meta](https://img.shields.io/badge/meta-1000000000000000000000%25-80dfff)](https://img.shields.io/badge/meta-1000000000000000000000%25-80dfff)
+[![bananas](https://img.shields.io/badge/bananas-0-ffdb4d)](https://img.shields.io/badge/bananas-0-ffdb4d)
+[![fallen bananas](https://img.shields.io/badge/fallen%20bananas-1-yellow)](https://img.shields.io/badge/fallen%20bananas-1-yellow)
 
 ## Installation
 
